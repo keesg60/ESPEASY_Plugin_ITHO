@@ -2,7 +2,13 @@
 //############################## Plugin 145: Itho ventilation unit 868Mhz remote ########################
 //#######################################################################################################
 
-// author :jodur, 13-1-2018 
+// author :jodur, 	13-1-2018
+// changed :jeroen, 2-11-2019
+// changed :svollebregt, 30-1-2020 - changes to improve stability: volatile decleration of state,
+//          disable logging within interrupts unles enabled, removed some unused code,
+//          reduce noInterrupts() blockage of code fragments to prevent crashes
+
+// Recommended to disable RF receive logging to minimize code execution within interrupts
 
 // List of commands:
 // 1111 to join ESP8266 with Itho ventilation unit
@@ -57,21 +63,22 @@ struct PLUGIN_145_ExtraSettingsStruct
 } PLUGIN_145_ExtraSettings;
 
 
-
 IthoCC1101 PLUGIN_145_rf;
 void PLUGIN_145_ITHOinterrupt() ICACHE_RAM_ATTR;
+void PLUGIN_145_ITHOcheck() ICACHE_RAM_ATTR; //as it is called by the ISR it is better to load this in RAM too?
 
 // extra for interrupt handling
 bool PLUGIN_145_ITHOhasPacket = false;
 Ticker PLUGIN_145_ITHOticker;
-int PLUGIN_145_State=1; // after startup it is assumed that the fan is running low
+volatile int PLUGIN_145_State=1; // after startup it is assumed that the fan is running low
 int PLUGIN_145_OldState=1;
-int PLUGIN_145_Timer=0;
-int PLUGIN_145_LastIDindex = 0;
+volatile int PLUGIN_145_Timer=0;
+volatile int PLUGIN_145_LastIDindex = 0;
 int PLUGIN_145_OldLastIDindex = 0;
-long PLUGIN_145_LastPublish=0; 
+//long PLUGIN_145_LastPublish=0; SV - not used for anything?
 int8_t Plugin_145_IRQ_pin=-1;
 bool PLUGIN_145_InitRunned = false;
+bool PLUGIN_145_Log = false;
 
 
 #define PLUGIN_145
@@ -86,9 +93,7 @@ bool PLUGIN_145_InitRunned = false;
 #define PLUGIN_145_Time2      20*60
 #define PLUGIN_145_Time3      30*60
 
-
-
-boolean Plugin_145(byte function, struct EventStruct *event, String& string)
+boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 {
 	boolean success = false;
 
@@ -98,8 +103,8 @@ boolean Plugin_145(byte function, struct EventStruct *event, String& string)
 	case PLUGIN_DEVICE_ADD:
 		{
 			Device[++deviceCount].Number = PLUGIN_ID_145;
-            Device[deviceCount].Type = DEVICE_TYPE_SINGLE;
-            Device[deviceCount].VType = SENSOR_TYPE_TRIPLE;
+			Device[deviceCount].Type = DEVICE_TYPE_SINGLE;
+			Device[deviceCount].VType = SENSOR_TYPE_TRIPLE;
 			Device[deviceCount].Ports = 0;
 			Device[deviceCount].PullUpOption = false;
 			Device[deviceCount].InverseLogicOption = false;
@@ -108,7 +113,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String& string)
 			Device[deviceCount].SendDataOption = true;
 			Device[deviceCount].TimerOption = true;
 			Device[deviceCount].GlobalSyncOption = true;
-		   break;
+		  break;
 		}
 
 	case PLUGIN_GET_DEVICENAME:
@@ -124,8 +129,8 @@ boolean Plugin_145(byte function, struct EventStruct *event, String& string)
 			strcpy_P(ExtraTaskSettings.TaskDeviceValueNames[2], PSTR(PLUGIN_VALUENAME3_145));
 			break;
 		}
-  
-  		
+
+
 	case PLUGIN_INIT:
 		{
 			//If configured interrupt pin differs from configured, release old pin first
@@ -156,181 +161,208 @@ boolean Plugin_145(byte function, struct EventStruct *event, String& string)
 		break;
 	}
 
-    case PLUGIN_ONCE_A_SECOND:
-    {
-      //decrement timer when timermode is running
-      if (PLUGIN_145_State>=10) PLUGIN_145_Timer--;
-      
-      //if timer has elapsed set Fan state to low
-      if ((PLUGIN_145_State>=10) && (PLUGIN_145_Timer<=0)) 
-       { PLUGIN_145_State=1;
-         PLUGIN_145_Timer=0;
-       } 
-      
-      //Publish new data when vars are changed or init has runned or timer is running (update every 2 sec)
-      if  ((PLUGIN_145_OldState!=PLUGIN_145_State) || ((PLUGIN_145_Timer>0) && (PLUGIN_145_Timer % 2==0)) || (PLUGIN_145_OldLastIDindex!=PLUGIN_145_LastIDindex)|| PLUGIN_145_InitRunned)
-      {
-		addLog(LOG_LEVEL_DEBUG, F("UPDATE by PLUGIN_ONCE_A_SECOND"));
-		PLUGIN_145_Publishdata(event);
-        sendData(event);
-		//reset flag set by init
-		PLUGIN_145_InitRunned=false;
-      }  
-      //Remeber current state for next cycle
-      PLUGIN_145_OldState=PLUGIN_145_State;
-	  PLUGIN_145_OldLastIDindex =PLUGIN_145_LastIDindex;
-	  success = true;
-      break;
-    }
-    
-	
-    case PLUGIN_READ: {    
-         
-         // This ensures that even when Values are not changing, data is send at the configured interval for aquisition 
-		 addLog(LOG_LEVEL_DEBUG, F("UPDATE by PLUGIN_READ"));
-		 PLUGIN_145_Publishdata(event);
-         success = true;
-         break;
-    }  
-    
-	case PLUGIN_WRITE: {
+  case PLUGIN_ONCE_A_SECOND:
+  {
+		//decrement timer when timermode is running
+		if (PLUGIN_145_State>=10) PLUGIN_145_Timer--;
 
+		//if timer has elapsed set Fan state to low
+		if ((PLUGIN_145_State>=10) && (PLUGIN_145_Timer<=0))
+		{
+			PLUGIN_145_State=1;
+			PLUGIN_145_Timer=0;
+		}
+
+		//Publish new data when vars are changed or init has runned or timer is running (update every 2 sec)
+		if  ((PLUGIN_145_OldState!=PLUGIN_145_State) || ((PLUGIN_145_Timer>0) && (PLUGIN_145_Timer % 2==0)) || (PLUGIN_145_OldLastIDindex!=PLUGIN_145_LastIDindex)|| PLUGIN_145_InitRunned)
+		{
+			addLog(LOG_LEVEL_DEBUG, F("UPDATE by PLUGIN_ONCE_A_SECOND"));
+			PLUGIN_145_Publishdata(event);
+			sendData(event);
+			//reset flag set by init
+			PLUGIN_145_InitRunned=false;
+		}
+		//Remeber current state for next cycle
+		PLUGIN_145_OldState=PLUGIN_145_State;
+		PLUGIN_145_OldLastIDindex =PLUGIN_145_LastIDindex;
+		success = true;
+		break;
+  }
+
+
+  case PLUGIN_READ: {
+    // This ensures that even when Values are not changing, data is send at the configured interval for aquisition
+		addLog(LOG_LEVEL_DEBUG, F("UPDATE by PLUGIN_READ"));
+		PLUGIN_145_Publishdata(event);
+		//sendData(event); //SV - Added to send status every xx secnds as set within plugin
+    success = true;
+    break;
+  }
+
+	case PLUGIN_WRITE: {
 		String tmpString = string;
 		String cmd = parseString(tmpString, 1);
 		String param1 = parseString(tmpString, 2);
-		noInterrupts();
+		//noInterrupts();
 			if (cmd.equalsIgnoreCase(F("STATE")))
 			{
 
 				if (param1.equalsIgnoreCase(F("1111")))
 				{
+					noInterrupts();
 					PLUGIN_145_rf.sendCommand(IthoJoin);
+					interrupts();
+					PLUGIN_145_rf.initReceive();
 					addLog(LOG_LEVEL_INFO, F("Sent command for 'join' to Itho unit"));
 					printWebString += F("Sent command for 'join' to Itho unit");
 					success = true;
 				}
-
 				if (param1.equalsIgnoreCase(F("9999")))
 				{
+					noInterrupts();
 					PLUGIN_145_rf.sendCommand(IthoLeave);
+					interrupts();
+					PLUGIN_145_rf.initReceive();
 					addLog(LOG_LEVEL_INFO, F("Sent command for 'leave' to Itho unit"));
 					printWebString += F("Sent command for 'leave' to Itho unit");
 					success = true;
 				}
-
-			   if (param1.equalsIgnoreCase(F("0")))
+			  if (param1.equalsIgnoreCase(F("0")))
 			    {
+					noInterrupts();
 					PLUGIN_145_rf.sendCommand(IthoStandby);
-					addLog(LOG_LEVEL_INFO, F("Sent command for 'standby' to Itho unit"));
-					printWebString += F("Sent command for 'standby' to Itho unit");
 					PLUGIN_145_State=0;
 					PLUGIN_145_Timer=0;
 					PLUGIN_145_LastIDindex = 0;
+					interrupts();
+					PLUGIN_145_rf.initReceive();
+					addLog(LOG_LEVEL_INFO, F("Sent command for 'standby' to Itho unit"));
+					printWebString += F("Sent command for 'standby' to Itho unit");
 					success = true;
 				 }
-        
 				if (param1.equalsIgnoreCase(F("1")))
 				{
+					noInterrupts();
 					PLUGIN_145_rf.sendCommand(IthoLow);
-					addLog(LOG_LEVEL_INFO, F("Sent command for 'low speed' to Itho unit"));
-					printWebString += F("Sent command for 'low speed' to Itho unit");
 					PLUGIN_145_State=1;
 					PLUGIN_145_Timer=0;
 					PLUGIN_145_LastIDindex = 0;
+					interrupts();
+					PLUGIN_145_rf.initReceive();
+					addLog(LOG_LEVEL_INFO, F("Sent command for 'low speed' to Itho unit"));
+					printWebString += F("Sent command for 'low speed' to Itho unit");
 					success = true;
 				}
-
 				if (param1.equalsIgnoreCase(F("2")))
 				{
+					noInterrupts();
 					PLUGIN_145_rf.sendCommand(IthoMedium);
-					addLog(LOG_LEVEL_INFO, F("Sent command for 'medium speed' to Itho unit"));
-					printWebString += F("Sent command for 'medium speed' to Itho unit");
 					PLUGIN_145_State=2;
 					PLUGIN_145_Timer=0;
 					PLUGIN_145_LastIDindex = 0;
+					interrupts();
+					PLUGIN_145_rf.initReceive();
+					addLog(LOG_LEVEL_INFO, F("Sent command for 'medium speed' to Itho unit"));
+					printWebString += F("Sent command for 'medium speed' to Itho unit");
 					success = true;
 				}
-
 				if (param1.equalsIgnoreCase(F("3")))
 				{
+					noInterrupts();
 					PLUGIN_145_rf.sendCommand(IthoHigh);
-					addLog(LOG_LEVEL_INFO, F("Sent command for 'full speed' to Itho unit"));
-					printWebString += F("Sent command for 'full speed' to Itho unit");
 					PLUGIN_145_State=3;
 					PLUGIN_145_Timer=0;
 					PLUGIN_145_LastIDindex = 0;
+					interrupts();
+					PLUGIN_145_rf.initReceive();
+					addLog(LOG_LEVEL_INFO, F("Sent command for 'high speed' to Itho unit"));
+					printWebString += F("Sent command for 'high speed' to Itho unit");
+
 					success = true;
 				}
-       
 				if (param1.equalsIgnoreCase(F("4")))
 				{
-				    PLUGIN_145_rf.sendCommand(IthoFull);
-					addLog(LOG_LEVEL_INFO, F("Sent command for 'full speed' to Itho unit"));
-					printWebString += F("Sent command for 'full speed' to Itho unit");
+					noInterrupts();
+				  PLUGIN_145_rf.sendCommand(IthoFull);
 					PLUGIN_145_State=4;
 					PLUGIN_145_Timer=0;
 					PLUGIN_145_LastIDindex = 0;
+					interrupts();
+					PLUGIN_145_rf.initReceive();
+					addLog(LOG_LEVEL_INFO, F("Sent command for 'full speed' to Itho unit"));
+					printWebString += F("Sent command for 'full speed' to Itho unit");
 					success = true;
 				}
 				if (param1.equalsIgnoreCase(F("13")))
 				{
+					noInterrupts();
 					PLUGIN_145_rf.sendCommand(IthoTimer1);
-					addLog(LOG_LEVEL_INFO, F("Sent command for 'timer 1' to Itho unit"));
-					printWebString += F("Sent command for 'timer 1' to Itho unit");
 					PLUGIN_145_State=13;
 					PLUGIN_145_Timer=PLUGIN_145_Time1;
 					PLUGIN_145_LastIDindex = 0;
+					interrupts();
+					PLUGIN_145_rf.initReceive();
+					addLog(LOG_LEVEL_INFO, F("Sent command for 'timer 1' to Itho unit"));
+					printWebString += F("Sent command for 'timer 1' to Itho unit");
 					success = true;
-				}				
-
+				}
 				if (param1.equalsIgnoreCase(F("23")))
 				{
+					noInterrupts();
 					PLUGIN_145_rf.sendCommand(IthoTimer2);
-					addLog(LOG_LEVEL_INFO, F("Sent command for 'timer 2' to Itho unit"));
-					printWebString += F("Sent command for 'timer 2' to Itho unit");
 					PLUGIN_145_State=23;
 					PLUGIN_145_Timer=PLUGIN_145_Time2;
 					PLUGIN_145_LastIDindex = 0;
+					interrupts();
+					PLUGIN_145_rf.initReceive();
+					addLog(LOG_LEVEL_INFO, F("Sent command for 'timer 2' to Itho unit"));
+					printWebString += F("Sent command for 'timer 2' to Itho unit");
 					success = true;
-				}		
-
+				}
 				if (param1.equalsIgnoreCase(F("33")))
 				{
+					noInterrupts();
 					PLUGIN_145_rf.sendCommand(IthoTimer3);
-					addLog(LOG_LEVEL_INFO, F("Sent command for 'timer 3' to Itho unit"));
-					printWebString += F("Sent command for 'timer 3' to Itho unit");
 					PLUGIN_145_State=33;
 					PLUGIN_145_Timer=PLUGIN_145_Time3;
 					PLUGIN_145_LastIDindex = 0;
+					interrupts();
+					PLUGIN_145_rf.initReceive();
+					addLog(LOG_LEVEL_INFO, F("Sent command for 'timer 3' to Itho unit"));
+					printWebString += F("Sent command for 'timer 3' to Itho unit");
 					success = true;
-				}	
-			} 
-			interrupts();
-	  break; }
-
-      case PLUGIN_WEBFORM_LOAD:
-        {
-		  addFormSubHeader(string, F("Remote RF Controls"));
-          addFormTextBox(string, F("Unit ID remote 1"), F("PLUGIN_145_ID1"), PLUGIN_145_ExtraSettings.ID1, 23);
-          addFormTextBox(string, F("Unit ID remote 2"), F("PLUGIN_145_ID2"), PLUGIN_145_ExtraSettings.ID2, 23);
-          addFormTextBox(string, F("Unit ID remote 3"), F("PLUGIN_145_ID3"), PLUGIN_145_ExtraSettings.ID3, 23);
-          success = true;
-          break;
-        }
-
-      case PLUGIN_WEBFORM_SAVE:
-        {
-		  strcpy(PLUGIN_145_ExtraSettings.ID1, WebServer.arg(F("PLUGIN_145_ID1")).c_str());
-		  strcpy(PLUGIN_145_ExtraSettings.ID2, WebServer.arg(F("PLUGIN_145_ID2")).c_str());
-		  strcpy(PLUGIN_145_ExtraSettings.ID3, WebServer.arg(F("PLUGIN_145_ID3")).c_str());
-		  SaveCustomTaskSettings(event->TaskIndex, (byte*)&PLUGIN_145_ExtraSettings, sizeof(PLUGIN_145_ExtraSettings));
-		  success = true;
-          break;
-        }	
+				}
+			}
+			//interrupts();
+	  break;
 	}
 
+  case PLUGIN_WEBFORM_LOAD:
+  {
+		addFormSubHeader(F("Remote RF Controls"));
+    addFormTextBox(F("Unit ID remote 1"), F("PLUGIN_145_ID1"), PLUGIN_145_ExtraSettings.ID1, 23);
+    addFormTextBox(F("Unit ID remote 2"), F("PLUGIN_145_ID2"), PLUGIN_145_ExtraSettings.ID2, 23);
+    addFormTextBox(F("Unit ID remote 3"), F("PLUGIN_145_ID3"), PLUGIN_145_ExtraSettings.ID3, 23);
+		addFormCheckBox(F("Enable RF receive log"), F("p145_log"), PCONFIG(0));
+    success = true;
+    break;
+  }
+
+  case PLUGIN_WEBFORM_SAVE:
+  {
+	  strcpy(PLUGIN_145_ExtraSettings.ID1, WebServer.arg(F("PLUGIN_145_ID1")).c_str());
+	  strcpy(PLUGIN_145_ExtraSettings.ID2, WebServer.arg(F("PLUGIN_145_ID2")).c_str());
+	  strcpy(PLUGIN_145_ExtraSettings.ID3, WebServer.arg(F("PLUGIN_145_ID3")).c_str());
+	  SaveCustomTaskSettings(event->TaskIndex, (byte*)&PLUGIN_145_ExtraSettings, sizeof(PLUGIN_145_ExtraSettings));
+
+		PCONFIG(0) = isFormItemChecked(F("p145_log"));
+		PLUGIN_145_Log = PCONFIG(0);
+	  success = true;
+    break;
+  }
+	}
 return success;
-} 
+}
 
 void PLUGIN_145_ITHOinterrupt()
 {
@@ -340,111 +372,143 @@ void PLUGIN_145_ITHOinterrupt()
 void PLUGIN_145_ITHOcheck()
 {
 	noInterrupts();
-	addLog(LOG_LEVEL_DEBUG, "RF signal received\n");
-	if (PLUGIN_145_rf.checkForNewPacket())
+	if(PLUGIN_145_Log){addLog(LOG_LEVEL_DEBUG, "RF signal received\n");}
+	if(PLUGIN_145_rf.checkForNewPacket())
 	{
 		IthoCommand cmd = PLUGIN_145_rf.getLastCommand();
 		String Id = PLUGIN_145_rf.getLastIDstr();
-		String log = F("device-ID remote: ");
-		log += Id;
-		log += F(" ,Command received=");
-		int index = PLUGIN_145_RFRemoteIndex(Id);
+
+		//Move check here to prevent function calling within ISR
+		byte index = 0;
+		if (Id == PLUGIN_145_ExtraSettings.ID1){
+			index = 1;
+	 	}
+		else if (Id == PLUGIN_145_ExtraSettings.ID2){
+			index = 2;
+		}
+		else if (Id == PLUGIN_145_ExtraSettings.ID3){
+			index = 3;
+		}
+
+		//int index = PLUGIN_145_RFRemoteIndex(Id);
 		// IF id is know index should be >0
 		if (index>0)
 		{
+			if(PLUGIN_145_Log){
+				String log = F("Command received from remote-ID: ");
+			  log += Id;
+			  addLog(LOG_LEVEL_DEBUG, log);
+			}
+			String log2 = "";
+			if(PLUGIN_145_Log){log2 += F("Command received=");}
 			switch (cmd)
 			{
 			 case IthoUnknown:
-				log += F("unknown\n");
+				if(PLUGIN_145_Log){log2 += F("unknown\n");}
 				break;
 			 case IthoStandby:
-				log += F("standby\n");
+			 case DucoStandby:
+				if(PLUGIN_145_Log){log2 += F("standby\n");}
 				PLUGIN_145_State = 0;
 				PLUGIN_145_Timer = 0;
 				PLUGIN_145_LastIDindex = index;
 				break;
 			 case IthoLow:
-				log += F("low\n");
+			 case DucoLow:
+			  if(PLUGIN_145_Log){log2 += F("low\n");}
 				PLUGIN_145_State = 1;
 				PLUGIN_145_Timer = 0;
 				PLUGIN_145_LastIDindex = index;
 			 break;
 			 case IthoMedium:
-				log += F("medium\n");
+ 			 case DucoMedium:
+				if(PLUGIN_145_Log){log2 += F("medium\n");}
 				PLUGIN_145_State = 2;
 				PLUGIN_145_Timer = 0;
 				PLUGIN_145_LastIDindex = index;
 				break;
 			 case IthoHigh:
-				log += F("high\n");
+			 case DucoHigh:
+				if(PLUGIN_145_Log){log2 += F("high\n");}
 				PLUGIN_145_State = 3;
 				PLUGIN_145_Timer = 0;
 				PLUGIN_145_LastIDindex = index;
 				break;
 			 case IthoFull:
-				log += F("full\n");
+				if(PLUGIN_145_Log){log2 += F("full\n");}
 				PLUGIN_145_State = 4;
 				PLUGIN_145_Timer = 0;
 				PLUGIN_145_LastIDindex = index;
 				break;
 			 case IthoTimer1:
-				log += +F("timer1\n");
+				if(PLUGIN_145_Log){log2 += +F("timer1\n");}
 				PLUGIN_145_State = 13;
 				PLUGIN_145_Timer = PLUGIN_145_Time1;
 				PLUGIN_145_LastIDindex = index;
 				break;
 			 case IthoTimer2:
-				log += F("timer2\n");
+				if(PLUGIN_145_Log){log2 += F("timer2\n");}
 				PLUGIN_145_State = 23;
 				PLUGIN_145_Timer = PLUGIN_145_Time2;
 				PLUGIN_145_LastIDindex = index;
 				break;
 			 case IthoTimer3:
-				log += F("timer3\n");
+				if(PLUGIN_145_Log){log2 += F("timer3\n");}
 				PLUGIN_145_State = 33;
 				PLUGIN_145_Timer = PLUGIN_145_Time3;
 				PLUGIN_145_LastIDindex = index;
 				break;
 			 case IthoJoin:
-				log += F("join\n");
+				if(PLUGIN_145_Log){log2 += F("join\n");}
 				break;
 			 case IthoLeave:
-				log += F("leave\n");
+				if(PLUGIN_145_Log){log2 += F("leave\n");}
 				break;
 			}
-			addLog(LOG_LEVEL_DEBUG, log);
+			if(PLUGIN_145_Log){addLog(LOG_LEVEL_DEBUG, log2);}
 		}
 		else {
-			log = F("Device-ID:");
-			log += Id;
-			log += F(" IGNORED");
+			if(PLUGIN_145_Log){
+				String log = F("Device-ID:");
+				log += Id;
+				log += F(" IGNORED");
 				addLog(LOG_LEVEL_DEBUG, log);
-			 }
+			}
+		}
 	}
-interrupts();
+  interrupts();
 }
-  
+
 void PLUGIN_145_Publishdata(struct EventStruct *event)
 {
     UserVar[event->BaseVarIndex]=PLUGIN_145_State;
     UserVar[event->BaseVarIndex+1]=PLUGIN_145_Timer;
-	UserVar[event->BaseVarIndex+2]=PLUGIN_145_LastIDindex;
-    PLUGIN_145_LastPublish=millis();
+		UserVar[event->BaseVarIndex+2]=PLUGIN_145_LastIDindex;
+
+		//PLUGIN_145_LastPublish=millis(); SV - no use of variable?
     String log = F("State: ");
     log += UserVar[event->BaseVarIndex];
     addLog(LOG_LEVEL_DEBUG, log);
     log = F("Timer: ");
     log += UserVar[event->BaseVarIndex+1];
     addLog(LOG_LEVEL_DEBUG, log);
-	log = F("LastIDindex: ");
-	log += UserVar[event->BaseVarIndex+2];
-	addLog(LOG_LEVEL_DEBUG, log);
+		log = F("LastIDindex: ");
+		log += UserVar[event->BaseVarIndex+2];
+		addLog(LOG_LEVEL_DEBUG, log);
 }
-
+/*
 int PLUGIN_145_RFRemoteIndex(String rfremoteid)
 {
-	if (rfremoteid == PLUGIN_145_ExtraSettings.ID1) return 1;
-		else if (rfremoteid == PLUGIN_145_ExtraSettings.ID2) return 2;
-			else if (rfremoteid == PLUGIN_145_ExtraSettings.ID3) return 3;
-				else return -1;
-}
+	if (rfremoteid == PLUGIN_145_ExtraSettings.ID1){
+		return 1;
+ 	}
+	else if (rfremoteid == PLUGIN_145_ExtraSettings.ID2){
+		return 2;
+	}
+	else if (rfremoteid == PLUGIN_145_ExtraSettings.ID3){
+		return 3;
+	}
+	else{
+		return -1;
+	}
+}*/
