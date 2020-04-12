@@ -7,9 +7,12 @@
 // changed :svollebregt, 30-1-2020 - changes to improve stability: volatile decleration of state,
 //          disable logging within interrupts unles enabled, removed some unused code,
 //          reduce noInterrupts() blockage of code fragments to prevent crashes
-//					svollebregt, 16-2-2020 - ISR now sets flag which is checked by 50 per seconds plugin call as
-//					receive ISR with Ticker was the cause of instability. Inspired by: https://github.com/arnemauer/Ducobox-ESPEasy-Plugin
-//					svollebregt, 17-2-2020 - Added setting to change remote SYNC1 byte in interface
+//			svollebregt, 16-2-2020 - ISR now sets flag which is checked by 50 per seconds plugin call as
+//			receive ISR with Ticker was the cause of instability. Inspired by: https://github.com/arnemauer/Ducobox-ESPEasy-Plugin
+//			svollebregt, 11-04-2020 - Minor changes to make code compatible with latest mega 20200410, removed SYNC1 option for now;
+//			better to change this value in the Itho-lib code and compile it yourself
+
+// Recommended to disable RF receive logging to minimize code execution within interrupts
 
 // List of commands:
 // 1111 to join ESP8266 with Itho ventilation unit
@@ -54,7 +57,8 @@
 #include <SPI.h>
 #include "IthoCC1101.h"
 #include "IthoPacket.h"
-#include <Ticker.h>
+#include "_Plugin_Helper.h"
+//#include <Ticker.h>
 
 //This extra settings struct is needed because the default settingsstruct doesn't support strings
 struct PLUGIN_145_ExtraSettingsStruct
@@ -65,11 +69,11 @@ struct PLUGIN_145_ExtraSettingsStruct
 
 
 IthoCC1101 PLUGIN_145_rf;
-//void PLUGIN_145_ITHOinterrupt() ICACHE_RAM_ATTR; // This should be done when function is defined
-//void PLUGIN_145_ITHOcheck();
+//void PLUGIN_145_ITHOinterrupt() ICACHE_RAM_ATTR;
+//void PLUGIN_145_ITHOcheck() ICACHE_RAM_ATTR; //as it is called by the ISR it is better to load this in RAM too?
 
 // extra for interrupt handling
-//bool PLUGIN_145_ITHOhasPacket = false;
+bool PLUGIN_145_ITHOhasPacket = false;
 //Ticker PLUGIN_145_ITHOticker;
 int PLUGIN_145_State=1; // after startup it is assumed that the fan is running low
 int PLUGIN_145_OldState=1;
@@ -80,9 +84,6 @@ int PLUGIN_145_OldLastIDindex = 0;
 int8_t Plugin_145_IRQ_pin=-1;
 bool PLUGIN_145_InitRunned = false;
 bool PLUGIN_145_Log = false;
-
-volatile uint8_t PLUGIN_145_Remote = 170; //Apparantly this needs to be declared volatile to load it in the RAM, as we need fast access not to cause packet drops
-
 volatile bool PLUGIN_145_Int = false;
 volatile unsigned long PLUGIN_145_Int_time = 0;
 
@@ -152,7 +153,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 			pinMode(Plugin_145_IRQ_pin, INPUT);
 			attachInterrupt(Plugin_145_IRQ_pin, PLUGIN_145_ITHOinterrupt, RISING);
 			addLog(LOG_LEVEL_INFO, F("CC1101 868Mhz transmitter initialized"));
-			PLUGIN_145_rf.initReceive(PLUGIN_145_Remote);
+			PLUGIN_145_rf.initReceive();
 			PLUGIN_145_InitRunned=true;
 			success = true;
 			break;
@@ -200,12 +201,13 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 		if (PLUGIN_145_Int)
 		{
 			PLUGIN_145_Int = false; // reset flag
+
 			unsigned long time_elapsed = millis() - PLUGIN_145_Int_time;
 			if (time_elapsed >= 10)
 			{
 				PLUGIN_145_ITHOcheck();
 			}
-			else // Wait a bit more to allow RX buffer to get ready
+			else
 			{
 				delay(10-time_elapsed);
 				PLUGIN_145_ITHOcheck();
@@ -238,7 +240,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 					noInterrupts();
 					PLUGIN_145_rf.sendCommand(IthoJoin);
 					interrupts();
-					PLUGIN_145_rf.initReceive(PLUGIN_145_Remote);
+					PLUGIN_145_rf.initReceive();
 					addLog(LOG_LEVEL_INFO, F("Sent command for 'join' to Itho unit"));
 					printWebString += F("Sent command for 'join' to Itho unit");
 					success = true;
@@ -248,7 +250,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 					noInterrupts();
 					PLUGIN_145_rf.sendCommand(IthoLeave);
 					interrupts();
-					PLUGIN_145_rf.initReceive(PLUGIN_145_Remote);
+					PLUGIN_145_rf.initReceive();
 					addLog(LOG_LEVEL_INFO, F("Sent command for 'leave' to Itho unit"));
 					printWebString += F("Sent command for 'leave' to Itho unit");
 					success = true;
@@ -261,7 +263,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 					PLUGIN_145_Timer=0;
 					PLUGIN_145_LastIDindex = 0;
 					interrupts();
-					PLUGIN_145_rf.initReceive(PLUGIN_145_Remote);
+					PLUGIN_145_rf.initReceive();
 					addLog(LOG_LEVEL_INFO, F("Sent command for 'standby' to Itho unit"));
 					printWebString += F("Sent command for 'standby' to Itho unit");
 					success = true;
@@ -274,7 +276,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 					PLUGIN_145_Timer=0;
 					PLUGIN_145_LastIDindex = 0;
 					interrupts();
-					PLUGIN_145_rf.initReceive(PLUGIN_145_Remote);
+					PLUGIN_145_rf.initReceive();
 					addLog(LOG_LEVEL_INFO, F("Sent command for 'low speed' to Itho unit"));
 					printWebString += F("Sent command for 'low speed' to Itho unit");
 					success = true;
@@ -287,7 +289,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 					PLUGIN_145_Timer=0;
 					PLUGIN_145_LastIDindex = 0;
 					interrupts();
-					PLUGIN_145_rf.initReceive(PLUGIN_145_Remote);
+					PLUGIN_145_rf.initReceive();
 					addLog(LOG_LEVEL_INFO, F("Sent command for 'medium speed' to Itho unit"));
 					printWebString += F("Sent command for 'medium speed' to Itho unit");
 					success = true;
@@ -300,7 +302,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 					PLUGIN_145_Timer=0;
 					PLUGIN_145_LastIDindex = 0;
 					interrupts();
-					PLUGIN_145_rf.initReceive(PLUGIN_145_Remote);
+					PLUGIN_145_rf.initReceive();
 					addLog(LOG_LEVEL_INFO, F("Sent command for 'high speed' to Itho unit"));
 					printWebString += F("Sent command for 'high speed' to Itho unit");
 
@@ -314,7 +316,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 					PLUGIN_145_Timer=0;
 					PLUGIN_145_LastIDindex = 0;
 					interrupts();
-					PLUGIN_145_rf.initReceive(PLUGIN_145_Remote);
+					PLUGIN_145_rf.initReceive();
 					addLog(LOG_LEVEL_INFO, F("Sent command for 'full speed' to Itho unit"));
 					printWebString += F("Sent command for 'full speed' to Itho unit");
 					success = true;
@@ -327,7 +329,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 					PLUGIN_145_Timer=PLUGIN_145_Time1;
 					PLUGIN_145_LastIDindex = 0;
 					interrupts();
-					PLUGIN_145_rf.initReceive(PLUGIN_145_Remote);
+					PLUGIN_145_rf.initReceive();
 					addLog(LOG_LEVEL_INFO, F("Sent command for 'timer 1' to Itho unit"));
 					printWebString += F("Sent command for 'timer 1' to Itho unit");
 					success = true;
@@ -340,7 +342,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 					PLUGIN_145_Timer=PLUGIN_145_Time2;
 					PLUGIN_145_LastIDindex = 0;
 					interrupts();
-					PLUGIN_145_rf.initReceive(PLUGIN_145_Remote);
+					PLUGIN_145_rf.initReceive();
 					addLog(LOG_LEVEL_INFO, F("Sent command for 'timer 2' to Itho unit"));
 					printWebString += F("Sent command for 'timer 2' to Itho unit");
 					success = true;
@@ -353,7 +355,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 					PLUGIN_145_Timer=PLUGIN_145_Time3;
 					PLUGIN_145_LastIDindex = 0;
 					interrupts();
-					PLUGIN_145_rf.initReceive(PLUGIN_145_Remote);
+					PLUGIN_145_rf.initReceive();
 					addLog(LOG_LEVEL_INFO, F("Sent command for 'timer 3' to Itho unit"));
 					printWebString += F("Sent command for 'timer 3' to Itho unit");
 					success = true;
@@ -370,24 +372,19 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
     addFormTextBox(F("Unit ID remote 2"), F("PLUGIN_145_ID2"), PLUGIN_145_ExtraSettings.ID2, 23);
     addFormTextBox(F("Unit ID remote 3"), F("PLUGIN_145_ID3"), PLUGIN_145_ExtraSettings.ID3, 23);
 		addFormCheckBox(F("Enable RF receive log"), F("p145_log"), PCONFIG(0));
-		addFormNote(F("Adviced to disable once remote ID has been found"));
-		addFormNumericBox(F("Remote SYNC byte"), F("p145_remote"), PCONFIG(1), 0, 255);
-		addFormNote(F("Sync byte for remote, known good values: 170 (default, remote with timer) and 172 (remote with not-at-home functionality)"));
     success = true;
     break;
   }
 
   case PLUGIN_WEBFORM_SAVE:
   {
-	  strcpy(PLUGIN_145_ExtraSettings.ID1, WebServer.arg(F("PLUGIN_145_ID1")).c_str());
-	  strcpy(PLUGIN_145_ExtraSettings.ID2, WebServer.arg(F("PLUGIN_145_ID2")).c_str());
-	  strcpy(PLUGIN_145_ExtraSettings.ID3, WebServer.arg(F("PLUGIN_145_ID3")).c_str());
+	  strcpy(PLUGIN_145_ExtraSettings.ID1, web_server.arg(F("PLUGIN_145_ID1")).c_str());
+	  strcpy(PLUGIN_145_ExtraSettings.ID2, web_server.arg(F("PLUGIN_145_ID2")).c_str());
+	  strcpy(PLUGIN_145_ExtraSettings.ID3, web_server.arg(F("PLUGIN_145_ID3")).c_str());
 	  SaveCustomTaskSettings(event->TaskIndex, (byte*)&PLUGIN_145_ExtraSettings, sizeof(PLUGIN_145_ExtraSettings));
 
 		PCONFIG(0) = isFormItemChecked(F("p145_log"));
-		PCONFIG(1) = getFormItemInt(F("p145_remote"), 170);
 		PLUGIN_145_Log = PCONFIG(0);
-		PLUGIN_145_Remote = PCONFIG(1);
 	  success = true;
     break;
   }
@@ -406,7 +403,7 @@ void PLUGIN_145_ITHOcheck()
 {
 	noInterrupts();
 	if(PLUGIN_145_Log){addLog(LOG_LEVEL_DEBUG, "RF signal received\n");}
-	if(PLUGIN_145_rf.checkForNewPacket(PLUGIN_145_Remote))
+	if(PLUGIN_145_rf.checkForNewPacket())
 	{
 		IthoCommand cmd = PLUGIN_145_rf.getLastCommand();
 		String Id = PLUGIN_145_rf.getLastIDstr();
@@ -423,7 +420,7 @@ void PLUGIN_145_ITHOcheck()
 			index = 3;
 		}
 
-		// int index = PLUGIN_145_RFRemoteIndex(Id);
+		//int index = PLUGIN_145_RFRemoteIndex(Id);
 		// IF id is know index should be >0
 		if (index>0)
 		{

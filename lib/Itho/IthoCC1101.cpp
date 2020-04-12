@@ -1,6 +1,5 @@
 /*
  * Author: Klusjesman, modified bij supersjimmie for Arduino/ESP8266
- * Modified 17-2-2020 by svollebregt to enable SYNC1 byte changing
  */
 
 #include "IthoCC1101.h"
@@ -246,7 +245,7 @@ void IthoCC1101::finishTransfer()
 	writeCommand(CC1101_SPWD);
 }
 
-void IthoCC1101::initReceive(uint8_t remote)
+void IthoCC1101::initReceive()
 {
 	/*
 	Configuration reverse engineered from RFT print.
@@ -276,7 +275,7 @@ void IthoCC1101::initReceive(uint8_t remote)
 	writeCommand(CC1101_SCAL);
 
 	//wait for calibration to finish
-	while ((readRegisterWithSyncProblem(CC1101_MARCSTATE, CC1101_STATUS_REGISTER)) != CC1101_MARCSTATE_IDLE) yield();
+	while ((readRegisterWithSyncProblem(CC1101_MARCSTATE, CC1101_STATUS_REGISTER)) != CC1101_MARCSTATE_IDLE) delay(0);
 
 	writeRegister(CC1101_FSCAL2 ,0x00);
 	writeRegister(CC1101_MCSM0 ,0x18);			//no auto calibrate
@@ -320,7 +319,7 @@ void IthoCC1101::initReceive(uint8_t remote)
 	writeCommand(CC1101_SCAL);
 
 	//wait for calibration to finish
-	while ((readRegisterWithSyncProblem(CC1101_MARCSTATE, CC1101_STATUS_REGISTER)) != CC1101_MARCSTATE_IDLE) yield();
+	while ((readRegisterWithSyncProblem(CC1101_MARCSTATE, CC1101_STATUS_REGISTER)) != CC1101_MARCSTATE_IDLE) delay(0);
 
 	writeRegister(CC1101_MCSM0 ,0x18);			//no auto calibrate
 
@@ -332,14 +331,14 @@ void IthoCC1101::initReceive(uint8_t remote)
 
 	writeCommand(CC1101_SRX);
 
-	while ((readRegisterWithSyncProblem(CC1101_MARCSTATE, CC1101_STATUS_REGISTER)) != CC1101_MARCSTATE_RX) yield();
+	while ((readRegisterWithSyncProblem(CC1101_MARCSTATE, CC1101_STATUS_REGISTER)) != CC1101_MARCSTATE_RX) delay(0);
 
 //	initReceiveMessage2(IthoUnknown);
-	initReceiveMessage2(ithomsg_unknown, remote);
+	initReceiveMessage2(ithomsg_unknown);
 }
 
 //void  IthoCC1101::initReceiveMessage2(IthoCommand expectedCommand)
-void  IthoCC1101::initReceiveMessage2(IthoMessageType expectedMessageType, uint8_t remote)
+void  IthoCC1101::initReceiveMessage2(IthoMessageType expectedMessageType)
 {
 	uint8_t marcState;
 
@@ -356,7 +355,7 @@ void  IthoCC1101::initReceiveMessage2(IthoMessageType expectedMessageType, uint8
 
 	//set fifo mode with fixed packet length and sync bytes
 	writeRegister(CC1101_PKTCTRL0 ,0x00);
-	writeRegister(CC1101_SYNC1 ,remote);			//message2 byte6 -- if not working change to 170, use 172 for remote with 'niet-thuis' function
+	writeRegister(CC1101_SYNC1 ,170);			//message2 byte6 -- if not working change to 170, use 172 for remote with 'niet-thuis' function
 //	writeRegister(CC1101_SYNC1 ,172);			//message2 byte6
 	writeRegister(CC1101_SYNC0 ,171);			//message2 byte7
 	writeRegister(CC1101_MDMCFG2 ,0x02);
@@ -372,12 +371,12 @@ void  IthoCC1101::initReceiveMessage2(IthoMessageType expectedMessageType, uint8
 	}
 }
 
-bool IthoCC1101::checkForNewPacket(uint8_t remote)
+bool IthoCC1101::checkForNewPacket()
 {
 	if (receiveData(&inMessage2, 42))
 	{
 		parseMessageCommand();
-		initReceiveMessage2(ithomsg_unknown, remote);
+		initReceiveMessage2(ithomsg_unknown);
 		return true;
 	}
 
