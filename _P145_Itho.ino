@@ -87,7 +87,6 @@ bool PLUGIN_145_Log = false;
 volatile bool PLUGIN_145_Int = false;
 volatile unsigned long PLUGIN_145_Int_time = 0;
 
-
 #define PLUGIN_145
 #define PLUGIN_ID_145         145
 #define PLUGIN_NAME_145       "Itho ventilation remote"
@@ -137,6 +136,19 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 			break;
 		}
 
+	case PLUGIN_GET_DEVICEGPIONAMES:
+	  {
+			event->String1 = formatGpioName_input(F("Interrupt pin (CC1101 GDO2)"));
+			break;
+    }
+
+	case PLUGIN_SET_DEFAULTS:
+		{
+    	PCONFIG(0) = 1;
+			PCONFIG(1) = 170;
+    	success = true;
+			break;
+		}
 
 	case PLUGIN_INIT:
 		{
@@ -148,6 +160,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 			}
 			LoadCustomTaskSettings(event->TaskIndex, (byte*)&PLUGIN_145_ExtraSettings, sizeof(PLUGIN_145_ExtraSettings));
 			addLog(LOG_LEVEL_INFO, F("Extra Settings PLUGIN_145 loaded"));
+			PLUGIN_145_rf.setSync1(PCONFIG(1));
 			PLUGIN_145_rf.init();
 			Plugin_145_IRQ_pin = Settings.TaskDevicePin1[event->TaskIndex];
 			pinMode(Plugin_145_IRQ_pin, INPUT);
@@ -372,6 +385,8 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
     addFormTextBox(F("Unit ID remote 2"), F("PLUGIN_145_ID2"), PLUGIN_145_ExtraSettings.ID2, 23);
     addFormTextBox(F("Unit ID remote 3"), F("PLUGIN_145_ID3"), PLUGIN_145_ExtraSettings.ID3, 23);
 		addFormCheckBox(F("Enable RF receive log"), F("p145_log"), PCONFIG(0));
+		addFormNumericBox(F("Remote SYNC1 byte"), F("p145_remote"), PCONFIG(1), 0, 255);
+		addFormNote(F("Sync byte for remote, known good values: 170 (default, remote with timer) and 172 (remote with not-at-home functionality)"));
     success = true;
     break;
   }
@@ -385,6 +400,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 
 		PCONFIG(0) = isFormItemChecked(F("p145_log"));
 		PLUGIN_145_Log = PCONFIG(0);
+		PCONFIG(1) = getFormItemInt(F("p145_remote"), 170);
 	  success = true;
     break;
   }
