@@ -15,15 +15,16 @@ For more info see also: https://gathering.tweakers.net/forum/list_messages/16909
 |3 - MOSI      |13=D7   |Data input to CC11xx                               |  
 |4 - SCK       |14=D5   |Clock pin                                          |
 |5 - MISO/GDO1 |12=D6   |Data output from CC11xx / serial clock from CC11xx |
-|6 - GDO2      |04=D1*  |output as a symbol of receiving or sending data    |
-|7 - GDO0      |        |output as a symbol of receiving or sending data    |
+|6 - GDO2      |04=D1*  |Interrupt pin                                      |
+|7 - GDO0      |NC      |Not in use                                         |
 | 8 - CSN      |15=D8   |Chip select / (SPI_SS)                             |
 
 *Note: GDO2 is used as interrupt pin for receiving and is configurable in the plugin
 
 Not recommended pins for intterupt:
-- Boot pins D3(GPIO0) and D4 (GPIO2) 
+- Boot related pins D3(GPIO0) and D4 (GPIO2) 
 - Pin with no interrupt support: D0 (GPIO16)
+- If connected to the default I2C pins make sure to disable I2C in the ESPEasy hardware settings
 
 ## List of commands:
 
