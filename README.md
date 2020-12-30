@@ -6,7 +6,9 @@ A CC1101 868Mhz transmitter is needed (available on ebay or aliexpress)
 This plugin is using the library from: https://github.com/supersjimmie/IthoEcoFanRFT/tree/master/Master/Itho 
 made by 'supersjimmie' and 'klusjesman'
 
-For more info see also: https://gathering.tweakers.net/forum/list_messages/1690945 
+For more info see also: https://gathering.tweakers.net/forum/list_messages/1690945
+
+Latest release: ESP_Easy_mega_20201227_normal_ESP8266_4M1M.bin
 
 |CC11xx pin    |ESP pins|Description                                        |
 |:-------------|:-------|:--------------------------------------------------|
