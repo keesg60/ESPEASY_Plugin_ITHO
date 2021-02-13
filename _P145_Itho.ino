@@ -11,6 +11,7 @@
 //			receive ISR with Ticker was the cause of instability. Inspired by: https://github.com/arnemauer/Ducobox-ESPEasy-Plugin
 //			svollebregt, 11-04-2020 - Minor changes to make code compatible with latest mega 20200410, removed SYNC1 option for now;
 //			better to change this value in the Itho-lib code and compile it yourself
+//			svollebreggt, 13-2-2021 - Now uses rewirtten library made by arjenhiemstra: https://github.com/arjenhiemstra/IthoEcoFanRFT
 
 // Recommended to disable RF receive logging to minimize code execution within interrupts
 
@@ -84,7 +85,7 @@ bool PLUGIN_145_Log = false;
 
 // volatile for interrupt function
 volatile bool PLUGIN_145_Int = false;
-volatile unsigned long PLUGIN_145_Int_time = 0;
+//volatile unsigned long PLUGIN_145_Int_time = 0;
 
 #define PLUGIN_145
 #define PLUGIN_ID_145         145
@@ -144,7 +145,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 	case PLUGIN_SET_DEFAULTS:
 		{
     	PCONFIG(0) = 1;
-			PCONFIG(1) = 170;
+			//PCONFIG(1) = 170;
     	success = true;
 			break;
 		}
@@ -159,11 +160,12 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 			}
 			LoadCustomTaskSettings(event->TaskIndex, (byte*)&PLUGIN_145_ExtraSettings, sizeof(PLUGIN_145_ExtraSettings));
 			addLog(LOG_LEVEL_INFO, F("Extra Settings PLUGIN_145 loaded"));
-			PLUGIN_145_rf.setSync1(PCONFIG(1));
+			//PLUGIN_145_rf.setSync1(PCONFIG(1));
+			PLUGIN_145_rf.setDeviceID(10, 87, 81); //DeviceID used to send commands, can also be changed on the fly for multi itho control, 10,87,81 corresponds with old library
 			PLUGIN_145_rf.init();
 			Plugin_145_IRQ_pin = Settings.TaskDevicePin1[event->TaskIndex];
 			pinMode(Plugin_145_IRQ_pin, INPUT);
-			attachInterrupt(Plugin_145_IRQ_pin, PLUGIN_145_ITHOinterrupt, RISING);
+			attachInterrupt(Plugin_145_IRQ_pin, PLUGIN_145_ITHOinterrupt, FALLING);
 			addLog(LOG_LEVEL_INFO, F("CC1101 868Mhz transmitter initialized"));
 			PLUGIN_145_rf.initReceive();
 			PLUGIN_145_InitRunned=true;
@@ -213,7 +215,8 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 		if (PLUGIN_145_Int)
 		{
 			PLUGIN_145_Int = false; // reset flag
-
+			PLUGIN_145_ITHOcheck();
+			/*
 			unsigned long time_elapsed = millis() - PLUGIN_145_Int_time;
 			if (time_elapsed >= 10)
 			{
@@ -223,7 +226,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 			{
 				delay(10-time_elapsed);
 				PLUGIN_145_ITHOcheck();
-			}
+			}*/
 		}
 		success = true;
 		break;
@@ -382,8 +385,8 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
     addFormTextBox(F("Unit ID remote 2"), F("PLUGIN_145_ID2"), PLUGIN_145_ExtraSettings.ID2, 23);
     addFormTextBox(F("Unit ID remote 3"), F("PLUGIN_145_ID3"), PLUGIN_145_ExtraSettings.ID3, 23);
 		addFormCheckBox(F("Enable RF receive log"), F("p145_log"), PCONFIG(0));
-		addFormNumericBox(F("Remote SYNC1 byte"), F("p145_remote"), PCONFIG(1), 0, 255);
-		addFormNote(F("Sync byte for remote, known good values: 170 (default, remote with timer) and 172 (remote with not-at-home functionality)"));
+		//addFormNumericBox(F("Remote SYNC1 byte"), F("p145_remote"), PCONFIG(1), 0, 255);
+		//addFormNote(F("Sync byte for remote, known good values: 170 (default, remote with timer) and 172 (remote with not-at-home functionality)"));
     success = true;
     break;
   }
@@ -397,7 +400,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 
 		PCONFIG(0) = isFormItemChecked(F("p145_log"));
 		PLUGIN_145_Log = PCONFIG(0);
-		PCONFIG(1) = getFormItemInt(F("p145_remote"), 170);
+		//PCONFIG(1) = getFormItemInt(F("p145_remote"), 170);
 	  success = true;
     break;
   }
@@ -405,10 +408,10 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 return success;
 }
 
-void ICACHE_RAM_ATTR PLUGIN_145_ITHOinterrupt()
+ICACHE_RAM_ATTR void PLUGIN_145_ITHOinterrupt()
 {
 	PLUGIN_145_Int = true; //flag
-	PLUGIN_145_Int_time = millis(); //used to register time since interrupt, to make sure we don't read within 10 ms as the RX buffer needs some time to get ready
+	//PLUGIN_145_Int_time = millis(); //used to register time since interrupt, to make sure we don't read within 10 ms as the RX buffer needs some time to get ready
 }
 
 void PLUGIN_145_ITHOcheck()
