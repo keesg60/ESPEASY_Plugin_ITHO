@@ -63,9 +63,9 @@
 
 //This extra settings struct is needed because the default settingsstruct doesn't support strings
 struct PLUGIN_145_ExtraSettingsStruct
-{	char ID1[24];
-	char ID2[24];
-	char ID3[24];
+{	char ID1[9];
+	char ID2[9];
+	char ID3[9];
 } PLUGIN_145_ExtraSettings;
 
 IthoCC1101 PLUGIN_145_rf;
@@ -381,9 +381,9 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
   case PLUGIN_WEBFORM_LOAD:
   {
 		addFormSubHeader(F("Remote RF Controls"));
-    addFormTextBox(F("Unit ID remote 1"), F("PLUGIN_145_ID1"), PLUGIN_145_ExtraSettings.ID1, 23);
-    addFormTextBox(F("Unit ID remote 2"), F("PLUGIN_145_ID2"), PLUGIN_145_ExtraSettings.ID2, 23);
-    addFormTextBox(F("Unit ID remote 3"), F("PLUGIN_145_ID3"), PLUGIN_145_ExtraSettings.ID3, 23);
+    addFormTextBox(F("Unit ID remote 1"), F("PLUGIN_145_ID1"), PLUGIN_145_ExtraSettings.ID1, 8);
+    addFormTextBox(F("Unit ID remote 2"), F("PLUGIN_145_ID2"), PLUGIN_145_ExtraSettings.ID2, 8);
+    addFormTextBox(F("Unit ID remote 3"), F("PLUGIN_145_ID3"), PLUGIN_145_ExtraSettings.ID3, 8);
 		addFormCheckBox(F("Enable RF receive log"), F("p145_log"), PCONFIG(0));
 		//addFormNumericBox(F("Remote SYNC1 byte"), F("p145_remote"), PCONFIG(1), 0, 255);
 		//addFormNote(F("Sync byte for remote, known good values: 170 (default, remote with timer) and 172 (remote with not-at-home functionality)"));

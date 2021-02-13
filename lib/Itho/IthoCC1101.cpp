@@ -332,7 +332,7 @@ bool IthoCC1101::parseMessageCommand() {
   if (isJoin2Command)    inIthoPacket.command = IthoJoin;
   if (isRVJoinCommand)   inIthoPacket.command = IthoJoin;
   if (isLeaveCommand)    inIthoPacket.command = IthoLeave;
-  
+
 
   uint8_t mLen = 0;
   if (isPowerCommand || isHighCommand || isMediumCommand || isLowCommand || isStandByCommand || isTimer1Command || isTimer2Command || isTimer3Command) {
@@ -351,7 +351,7 @@ bool IthoCC1101::parseMessageCommand() {
     inIthoPacket.command = IthoUnknown;
     return false;
   }
-  
+
   return true;
 }
 
@@ -407,7 +407,7 @@ void IthoCC1101::sendCommand(IthoCommand command)
     finishTransfer();
     delay(delaytime);
   }
-  initReceive();
+  //initReceive(); SV: I call this in the ESPEasy plugin
 }
 
 
