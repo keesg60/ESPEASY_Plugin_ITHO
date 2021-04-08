@@ -19,6 +19,26 @@
 #include <Arduino.h>
 #include <SPI.h>
 
+//#define CRC_FILTER
+
+////original sync byte pattern
+//#define STARTBYTE 6 //relevant data starts 6 bytes after the sync pattern bytes 170/171
+//#define SYNC1 170
+//#define SYNC0 171
+//#define MDMCFG2 0x02 //16bit sync word / 16bit specific
+
+////alternative sync byte pattern (filter much more non-itho messages out. Maybe too strict? Testing needed.
+//#define STARTBYTE 0 //relevant data starts 0 bytes after the sync pattern bytes 179/42/171/42
+//#define SYNC1 187 //byte11 = 179, byte13 = 171 with SYNC1 = 163, 179 and 171 differ only by 1 bit
+//#define SYNC0 42
+//#define MDMCFG2 0x03 //32bit sync word / 30bit specific
+
+//alternative sync byte pattern
+#define STARTBYTE 2 //relevant data starts 2 bytes after the sync pattern bytes 179/42
+#define SYNC1 179
+#define SYNC0 42
+#define MDMCFG2 0x02 //16bit sync word / 16bit specific
+
 // default constructor
 IthoCC1101::IthoCC1101(uint8_t counter, uint8_t sendTries) : CC1101()
 {
@@ -53,46 +73,45 @@ void IthoCC1101::initSendMessage(uint8_t len)
 
   /*
     Configuration reverse engineered from remote print. The commands below are used by IthoDaalderop.
-
-    Base frequency		868.299866MHz
-    Channel				0
-    Channel spacing		199.951172kHz
-    Carrier frequency	868.299866MHz
-    Xtal frequency		26.000000MHz
-    Data rate			38.3835kBaud
-    Manchester			disabled
-    Modulation			2-FSK
-    Deviation			50.781250kHz
-    TX power			?
-    PA ramping			enabled
-    Whitening			disabled
+    Base frequency    868.299866MHz
+    Channel       0
+    Channel spacing   199.951172kHz
+    Carrier frequency 868.299866MHz
+    Xtal frequency    26.000000MHz
+    Data rate     38.3835kBaud
+    Manchester      disabled
+    Modulation      2-FSK
+    Deviation     50.781250kHz
+    TX power      ?
+    PA ramping      enabled
+    Whitening     disabled
   */
   writeCommand(CC1101_SRES);
   delayMicroseconds(1);
-  writeRegister(CC1101_IOCFG0 , 0x2E);		//High impedance (3-state)
-  writeRegister(CC1101_FREQ2 , 0x21);		//00100001	878MHz-927.8MHz
-  writeRegister(CC1101_FREQ1 , 0x65);		//01100101
-  writeRegister(CC1101_FREQ0 , 0x6A);		//01101010
-  writeRegister(CC1101_MDMCFG4 , 0x5A);	//difference compared to message1
-  writeRegister(CC1101_MDMCFG3 , 0x83);	//difference compared to message1
-  writeRegister(CC1101_MDMCFG2 , 0x00);	//00000000	2-FSK, no manchester encoding/decoding, no preamble/sync
-  writeRegister(CC1101_MDMCFG1 , 0x22);	//00100010
-  writeRegister(CC1101_MDMCFG0 , 0xF8);	//11111000
-  writeRegister(CC1101_CHANNR , 0x00);		//00000000
-  writeRegister(CC1101_DEVIATN , 0x50);	//difference compared to message1
-  writeRegister(CC1101_FREND0 , 0x17);		//00010111	use index 7 in PA table
-  writeRegister(CC1101_MCSM0 , 0x18);		//00011000	PO timeout Approx. 146�s - 171�s, Auto calibrate When going from IDLE to RX or TX (or FSTXON)
-  writeRegister(CC1101_FSCAL3 , 0xA9);		//10101001
-  writeRegister(CC1101_FSCAL2 , 0x2A);		//00101010
-  writeRegister(CC1101_FSCAL1 , 0x00);		//00000000
-  writeRegister(CC1101_FSCAL0 , 0x11);		//00010001
-  writeRegister(CC1101_FSTEST , 0x59);		//01011001	For test only. Do not write to this register.
-  writeRegister(CC1101_TEST2 , 0x81);		//10000001	For test only. Do not write to this register.
-  writeRegister(CC1101_TEST1 , 0x35);		//00110101	For test only. Do not write to this register.
-  writeRegister(CC1101_TEST0 , 0x0B);		//00001011	For test only. Do not write to this register.
-  writeRegister(CC1101_PKTCTRL0 , 0x12);	//00010010	Enable infinite length packets, CRC disabled, Turn data whitening off, Serial Synchronous mode
-  writeRegister(CC1101_ADDR , 0x00);		//00000000
-  writeRegister(CC1101_PKTLEN , 0xFF);		//11111111	//Not used, no hardware packet handling
+  writeRegister(CC1101_IOCFG0 , 0x2E);    //High impedance (3-state)
+  writeRegister(CC1101_FREQ2 , 0x21);   //00100001  878MHz-927.8MHz
+  writeRegister(CC1101_FREQ1 , 0x65);   //01100101
+  writeRegister(CC1101_FREQ0 , 0x6A);   //01101010
+  writeRegister(CC1101_MDMCFG4 , 0x5A); //difference compared to message1
+  writeRegister(CC1101_MDMCFG3 , 0x83); //difference compared to message1
+  writeRegister(CC1101_MDMCFG2 , 0x00); //00000000  2-FSK, no manchester encoding/decoding, no preamble/sync
+  writeRegister(CC1101_MDMCFG1 , 0x22); //00100010
+  writeRegister(CC1101_MDMCFG0 , 0xF8); //11111000
+  writeRegister(CC1101_CHANNR , 0x00);    //00000000
+  writeRegister(CC1101_DEVIATN , 0x50); //difference compared to message1
+  writeRegister(CC1101_FREND0 , 0x17);    //00010111  use index 7 in PA table
+  writeRegister(CC1101_MCSM0 , 0x18);   //00011000  PO timeout Approx. 146microseconds - 171microseconds, Auto calibrate When going from IDLE to RX or TX (or FSTXON)
+  writeRegister(CC1101_FSCAL3 , 0xA9);    //10101001
+  writeRegister(CC1101_FSCAL2 , 0x2A);    //00101010
+  writeRegister(CC1101_FSCAL1 , 0x00);    //00000000
+  writeRegister(CC1101_FSCAL0 , 0x11);    //00010001
+  writeRegister(CC1101_FSTEST , 0x59);    //01011001  For test only. Do not write to this register.
+  writeRegister(CC1101_TEST2 , 0x81);   //10000001  For test only. Do not write to this register.
+  writeRegister(CC1101_TEST1 , 0x35);   //00110101  For test only. Do not write to this register.
+  writeRegister(CC1101_TEST0 , 0x0B);   //00001011  For test only. Do not write to this register.
+  writeRegister(CC1101_PKTCTRL0 , 0x12);  //00010010  Enable infinite length packets, CRC disabled, Turn data whitening off, Serial Synchronous mode
+  writeRegister(CC1101_ADDR , 0x00);    //00000000
+  writeRegister(CC1101_PKTLEN , 0xFF);    //11111111  //Not used, no hardware packet handling
 
   //0x6F,0x26,0x2E,0x8C,0x87,0xCD,0xC7,0xC0
   writeBurstRegister(CC1101_PATABLE | CC1101_WRITE_BURST, (uint8_t*)ithoPaTableSend, 8);
@@ -101,20 +120,20 @@ void IthoCC1101::initSendMessage(uint8_t len)
   writeCommand(CC1101_SIDLE);
   writeCommand(CC1101_SIDLE);
 
-  writeRegister(CC1101_MDMCFG4 , 0x5A);	//difference compared to message1
-  writeRegister(CC1101_MDMCFG3 , 0x83);	//difference compared to message1
-  writeRegister(CC1101_DEVIATN , 0x50);	//difference compared to message1
-  writeRegister(CC1101_IOCFG0 , 0x2D);		//GDO0_Z_EN_N. When this output is 0, GDO0 is configured as input (for serial TX data).
-  writeRegister(CC1101_IOCFG1 , 0x0B);		//Serial Clock. Synchronous to the data in synchronous serial mode.
+  writeRegister(CC1101_MDMCFG4 , 0x5A); //difference compared to message1
+  writeRegister(CC1101_MDMCFG3 , 0x83); //difference compared to message1
+  writeRegister(CC1101_DEVIATN , 0x50); //difference compared to message1
+  writeRegister(CC1101_IOCFG0 , 0x2D);    //GDO0_Z_EN_N. When this output is 0, GDO0 is configured as input (for serial TX data).
+  writeRegister(CC1101_IOCFG1 , 0x0B);    //Serial Clock. Synchronous to the data in synchronous serial mode.
 
   writeCommand(CC1101_STX);
   writeCommand(CC1101_SIDLE);
 
-  writeRegister(CC1101_MDMCFG4 , 0x5A);	//difference compared to message1
-  writeRegister(CC1101_MDMCFG3 , 0x83);	//difference compared to message1
-  writeRegister(CC1101_DEVIATN , 0x50);	//difference compared to message1
-  //writeRegister(CC1101_IOCFG0 ,0x2D);		//GDO0_Z_EN_N. When this output is 0, GDO0 is configured as input (for serial TX data).
-  //writeRegister(CC1101_IOCFG1 ,0x0B);		//Serial Clock. Synchronous to the data in synchronous serial mode.
+  writeRegister(CC1101_MDMCFG4 , 0x5A); //difference compared to message1
+  writeRegister(CC1101_MDMCFG3 , 0x83); //difference compared to message1
+  writeRegister(CC1101_DEVIATN , 0x50); //difference compared to message1
+  //writeRegister(CC1101_IOCFG0 ,0x2D);   //GDO0_Z_EN_N. When this output is 0, GDO0 is configured as input (for serial TX data).
+  //writeRegister(CC1101_IOCFG1 ,0x0B);   //Serial Clock. Synchronous to the data in synchronous serial mode.
 
   //Itho is using serial mode for transmit. We want to use the TX FIFO with fixed packet length for simplicity.
   writeRegister(CC1101_IOCFG0 , 0x2E);
@@ -143,19 +162,19 @@ void IthoCC1101::initReceive()
   /*
     Configuration reverse engineered from RFT print.
 
-    Base frequency		868.299866MHz
-    Channel				0
-    Channel spacing		199.951172kHz
-    Carrier frequency	868.299866MHz
-    Xtal frequency		26.000000MHz
-    Data rate			38.3835kBaud
-    RX filter BW		325.000000kHz
-    Manchester			disabled
-    Modulation			2-FSK
-    Deviation			50.781250kHz
-    TX power			0x6F,0x26,0x2E,0x7F,0x8A,0x84,0xCA,0xC4
-    PA ramping			enabled
-    Whitening			disabled
+    Base frequency    868.299866MHz
+    Channel       0
+    Channel spacing   199.951172kHz
+    Carrier frequency 868.299866MHz
+    Xtal frequency    26.000000MHz
+    Data rate     38.3835kBaud
+    RX filter BW    325.000000kHz
+    Manchester      disabled
+    Modulation      2-FSK
+    Deviation     50.781250kHz
+    TX power      0x6F,0x26,0x2E,0x7F,0x8A,0x84,0xCA,0xC4
+    PA ramping      enabled
+    Whitening     disabled
   */
   writeCommand(CC1101_SRES);
 
@@ -171,24 +190,24 @@ void IthoCC1101::initReceive()
   while ((readRegisterWithSyncProblem(CC1101_MARCSTATE, CC1101_STATUS_REGISTER)) != CC1101_MARCSTATE_IDLE) yield();
 
   writeRegister(CC1101_FSCAL2 , 0x00);
-  writeRegister(CC1101_MCSM0 , 0x18);			//no auto calibrate
+  writeRegister(CC1101_MCSM0 , 0x18);     //no auto calibrate
   writeRegister(CC1101_FREQ2 , 0x21);
   writeRegister(CC1101_FREQ1 , 0x65);
   writeRegister(CC1101_FREQ0 , 0x6A);
-  writeRegister(CC1101_IOCFG0 , 0x2E);			//High impedance (3-state)
-  writeRegister(CC1101_IOCFG2 , 0x06);			//0x06 Assert when sync word has been sent / received, and de-asserts at the end of the packet.
+  writeRegister(CC1101_IOCFG0 , 0x2E);      //High impedance (3-state)
+  writeRegister(CC1101_IOCFG2 , 0x06);      //0x06 Assert when sync word has been sent / received, and de-asserts at the end of the packet.
   writeRegister(CC1101_FSCTRL1 , 0x06);
   writeRegister(CC1101_FSCTRL0 , 0x00);
   writeRegister(CC1101_MDMCFG4 , 0x5A);
   writeRegister(CC1101_MDMCFG3 , 0x83);
-  writeRegister(CC1101_MDMCFG2 , 0x00);		//Enable digital DC blocking filter before demodulator, 2-FSK, Disable Manchester encoding/decoding, No preamble/sync
-  writeRegister(CC1101_MDMCFG1 , 0x22);		//Disable FEC
+  writeRegister(CC1101_MDMCFG2 , 0x00);   //Enable digital DC blocking filter before demodulator, 2-FSK, Disable Manchester encoding/decoding, No preamble/sync
+  writeRegister(CC1101_MDMCFG1 , 0x22);   //Disable FEC
   writeRegister(CC1101_MDMCFG0 , 0xF8);
   writeRegister(CC1101_CHANNR , 0x00);
   writeRegister(CC1101_DEVIATN , 0x50);
   writeRegister(CC1101_FREND1 , 0x56);
   writeRegister(CC1101_FREND0 , 0x17);
-  writeRegister(CC1101_MCSM0 , 0x18);			//no auto calibrate
+  writeRegister(CC1101_MCSM0 , 0x18);     //no auto calibrate
   writeRegister(CC1101_FOCCFG , 0x16);
   writeRegister(CC1101_BSCFG , 0x6C);
   writeRegister(CC1101_AGCCTRL2 , 0x43);
@@ -202,8 +221,8 @@ void IthoCC1101::initReceive()
   writeRegister(CC1101_TEST2 , 0x81);
   writeRegister(CC1101_TEST1 , 0x35);
   writeRegister(CC1101_TEST0 , 0x0B);
-  writeRegister(CC1101_PKTCTRL1 , 0x04);		//No address check, Append two bytes with status RSSI/LQI/CRC OK,
-  writeRegister(CC1101_PKTCTRL0 , 0x32);		//Infinite packet length mode, CRC disabled for TX and RX, No data whitening, Asynchronous serial mode, Data in on GDO0 and data out on either of the GDOx pins
+  writeRegister(CC1101_PKTCTRL1 , 0x04);    //No address check, Append two bytes with status RSSI/LQI/CRC OK,
+  writeRegister(CC1101_PKTCTRL0 , 0x32);    //Infinite packet length mode, CRC disabled for TX and RX, No data whitening, Asynchronous serial mode, Data in on GDO0 and data out on either of the GDOx pins
   writeRegister(CC1101_ADDR , 0x00);
   writeRegister(CC1101_PKTLEN , 0xFF);
   writeRegister(CC1101_TEST0 , 0x09);
@@ -213,13 +232,13 @@ void IthoCC1101::initReceive()
   //wait for calibration to finish
   while ((readRegisterWithSyncProblem(CC1101_MARCSTATE, CC1101_STATUS_REGISTER)) != CC1101_MARCSTATE_IDLE) yield();
 
-  writeRegister(CC1101_MCSM0 , 0x18);			//no auto calibrate
+  writeRegister(CC1101_MCSM0 , 0x18);     //no auto calibrate
 
   writeCommand(CC1101_SIDLE);
   writeCommand(CC1101_SIDLE);
 
-  writeRegister(CC1101_MDMCFG2 , 0x00);		//Enable digital DC blocking filter before demodulator, 2-FSK, Disable Manchester encoding/decoding, No preamble/sync
-  writeRegister(CC1101_IOCFG0 , 0x0D);			//Serial Data Output. Used for asynchronous serial mode.
+  writeRegister(CC1101_MDMCFG2 , 0x00);   //Enable digital DC blocking filter before demodulator, 2-FSK, Disable Manchester encoding/decoding, No preamble/sync
+  writeRegister(CC1101_IOCFG0 , 0x0D);      //Serial Data Output. Used for asynchronous serial mode.
 
   writeCommand(CC1101_SRX);
 
@@ -232,7 +251,7 @@ void  IthoCC1101::initReceiveMessage()
 {
   uint8_t marcState;
 
-  writeCommand(CC1101_SIDLE);	//idle
+  writeCommand(CC1101_SIDLE); //idle
 
   //set datarate
   writeRegister(CC1101_MDMCFG4 , 0x5A); // set kBaud
@@ -240,13 +259,13 @@ void  IthoCC1101::initReceiveMessage()
   writeRegister(CC1101_DEVIATN , 0x50);
 
   //set fifo mode with fixed packet length and sync bytes
-  writeRegister(CC1101_PKTLEN , 63);			//63 bytes message (sync at beginning of message is removed by CC1101)
+  writeRegister(CC1101_PKTLEN , 63);      //63 bytes message (sync at beginning of message is removed by CC1101)
 
   //set fifo mode with fixed packet length and sync bytes
   writeRegister(CC1101_PKTCTRL0 , 0x00);
-  writeRegister(CC1101_SYNC1 , 163);			//message2 byte11 = 179, byte13 = 171 with SYNC1 = 163, 179 and 171 differ only by 1 bit
-  writeRegister(CC1101_SYNC0 , 42);			  //message2 byte12,14
-  writeRegister(CC1101_MDMCFG2 , 0x03);   //32bit sync word / 30bit specific
+  writeRegister(CC1101_SYNC1 , SYNC1);
+  writeRegister(CC1101_SYNC0 , SYNC0);
+  writeRegister(CC1101_MDMCFG2 , MDMCFG2);
   writeRegister(CC1101_PKTCTRL1 , 0x00);
 
   writeCommand(CC1101_SRX); //switch to RX state
@@ -268,55 +287,38 @@ bool IthoCC1101::checkForNewPacket() {
 }
 
 bool IthoCC1101::parseMessageCommand() {
-  bool isPowerCommand = true;
-  bool isHighCommand = true;
-  bool isRVHighCommand = true;
-  bool isMediumCommand = true;
-  bool isRVMediumCommand = true;
-  bool isLowCommand = true;
-  bool isRVLowCommand = true;
-  bool isRVAutoCommand = true;
-  bool isStandByCommand = true;
-  bool isTimer1Command = true;
-  bool isTimer2Command = true;
-  bool isTimer3Command = true;
-  bool isJoinCommand = true;
-  bool isJoin2Command = true;
-  bool isRVJoinCommand = true;
-  bool isLeaveCommand = true;
 
   messageDecode(&inMessage, &inIthoPacket);
+
+  //deviceType of message type?
+  inIthoPacket.deviceType  = inIthoPacket.dataDecoded[0];
+
+  //deviceID
+  inIthoPacket.deviceId[0] = inIthoPacket.dataDecoded[1];
+  inIthoPacket.deviceId[1] = inIthoPacket.dataDecoded[2];
+  inIthoPacket.deviceId[2] = inIthoPacket.dataDecoded[3];
 
   //counter1
   inIthoPacket.counter = inIthoPacket.dataDecoded[4];
 
-  //match received commandBytes from dataDecoded [offset is +5] with known command bytes
-  //the first 2 and last 2 bytes seem to be unique and universal
-  uint8_t offset = 0;
-  if (inIthoPacket.deviceType == 28 || inIthoPacket.deviceType == 24) offset = 2;
-  for (int i = 0; i < 6; i++)
-  {
-    if (i == 2) continue; //skip byte3, rft-rv device seem to sometimes have a different number there for Timer command
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessagePowerCommandBytes[i])    isPowerCommand    = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageHighCommandBytes[i])     isHighCommand     = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageRVHighCommandBytes[i])   isRVHighCommand   = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageMediumCommandBytes[i])   isMediumCommand   = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageRVMediumCommandBytes[i]) isRVMediumCommand = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageLowCommandBytes[i])      isLowCommand      = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageRVLowCommandBytes[i])    isRVLowCommand    = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageRVAutoCommandBytes[i])   isRVAutoCommand   = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageStandByCommandBytes[i])  isStandByCommand  = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageTimer1CommandBytes[i])   isTimer1Command   = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageTimer2CommandBytes[i])   isTimer2Command   = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageTimer3CommandBytes[i])   isTimer3Command   = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageJoinCommandBytes[i])     isJoinCommand     = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageJoin2CommandBytes[i])    isJoin2Command    = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageRVJoinCommandBytes[i])   isRVJoinCommand   = false;
-    if (inIthoPacket.dataDecoded[i + 5 + offset] != ithoMessageLeaveCommandBytes[i])    isLeaveCommand    = false;
-  }
+  bool isHighCommand      = checkIthoCommand(&inIthoPacket, ithoMessageHighCommandBytes);
+  bool isRVHighCommand    = checkIthoCommand(&inIthoPacket, ithoMessageRVHighCommandBytes);
+  bool isMediumCommand    = checkIthoCommand(&inIthoPacket, ithoMessageMediumCommandBytes);
+  bool isRVMediumCommand  = checkIthoCommand(&inIthoPacket, ithoMessageRVMediumCommandBytes);
+  bool isLowCommand       = checkIthoCommand(&inIthoPacket, ithoMessageLowCommandBytes);
+  bool isRVLowCommand     = checkIthoCommand(&inIthoPacket, ithoMessageRVLowCommandBytes);
+  bool isRVAutoCommand    = checkIthoCommand(&inIthoPacket, ithoMessageRVAutoCommandBytes);
+  bool isStandByCommand   = checkIthoCommand(&inIthoPacket, ithoMessageStandByCommandBytes);
+  bool isTimer1Command    = checkIthoCommand(&inIthoPacket, ithoMessageTimer1CommandBytes);
+  bool isTimer2Command    = checkIthoCommand(&inIthoPacket, ithoMessageTimer2CommandBytes);
+  bool isTimer3Command    = checkIthoCommand(&inIthoPacket, ithoMessageTimer3CommandBytes);
+  bool isJoinCommand      = checkIthoCommand(&inIthoPacket, ithoMessageJoinCommandBytes);
+  bool isJoin2Command     = checkIthoCommand(&inIthoPacket, ithoMessageJoin2CommandBytes);
+  bool isRVJoinCommand    = checkIthoCommand(&inIthoPacket, ithoMessageRVJoinCommandBytes);
+  bool isLeaveCommand     = checkIthoCommand(&inIthoPacket, ithoMessageLeaveCommandBytes);
+
   //determine command
   inIthoPacket.command = IthoUnknown;
-  if (isPowerCommand)    inIthoPacket.command = IthoFull;
   if (isHighCommand)     inIthoPacket.command = IthoHigh;
   if (isRVHighCommand)   inIthoPacket.command = IthoHigh;
   if (isMediumCommand)   inIthoPacket.command = IthoMedium;
@@ -333,7 +335,7 @@ bool IthoCC1101::parseMessageCommand() {
   if (isRVJoinCommand)   inIthoPacket.command = IthoJoin;
   if (isLeaveCommand)    inIthoPacket.command = IthoLeave;
 
-
+#if defined (CRC_FILTER)
   uint8_t mLen = 0;
   if (isPowerCommand || isHighCommand || isMediumCommand || isLowCommand || isStandByCommand || isTimer1Command || isTimer2Command || isTimer3Command) {
     mLen = 11;
@@ -351,7 +353,21 @@ bool IthoCC1101::parseMessageCommand() {
     inIthoPacket.command = IthoUnknown;
     return false;
   }
+#endif
 
+  return true;
+}
+
+bool IthoCC1101::checkIthoCommand(IthoPacket *itho, const uint8_t commandBytes[]) {
+  uint8_t offset = 0;
+  if (itho->deviceType == 28 || itho->deviceType == 24) offset = 2;
+  for (int i = 4; i < 6; i++)
+  {
+    //if (i == 2 || i == 3) continue; //skip byte3 and byte4, rft-rv and co2-auto remote device seem to sometimes have a different number there
+    if ( (itho->dataDecoded[i + 5 + offset] != commandBytes[i]) && (itho->dataDecodedChk[i + 5 + offset] != commandBytes[i]) ) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -384,18 +400,6 @@ void IthoCC1101::sendCommand(IthoCommand command)
       break;
   }
 
-  if (DEBUG == 2) {
-    char buf[32];
-    Serial.println();
-    Serial.print("outMessage length: "); Serial.print(outMessage.length); Serial.println(" bytes; outMessage bit pattern: ");
-    for (int i = 0; i < outMessage.length; i++) {
-      strcpy(buf, "");
-      sprintf(buf, BYTE_TO_BINARY_PATTERN, BYTE_TO_BINARY(outMessage.data[i]));
-      Serial.print(buf);
-    }
-    Serial.println();
-  }
-
   //send messages
   for (int i = 0; i < maxTries; i++)
   {
@@ -407,9 +411,8 @@ void IthoCC1101::sendCommand(IthoCommand command)
     finishTransfer();
     delay(delaytime);
   }
-  //initReceive(); SV: I call this in the ESPEasy plugin
+  //initReceive(); SV - I call this from the ESPEasy plugin to prevent crashes
 }
-
 
 void IthoCC1101::createMessageStart(IthoPacket *itho, CC1101Packet *packet)
 {
@@ -582,12 +585,12 @@ uint8_t* IthoCC1101::getMessageCommandBytes(IthoCommand command)
 {
   switch (command)
   {
-    case IthoFull:
-      return (uint8_t*)&ithoMessagePowerCommandBytes[0];
     case IthoStandby:
       return (uint8_t*)&ithoMessageStandByCommandBytes[0];
     case IthoHigh:
       return (uint8_t*)&ithoMessageHighCommandBytes[0];
+    case IthoFull:
+      return (uint8_t*)&ithoMessageFullCommandBytes[0];
     case IthoMedium:
       return (uint8_t*)&ithoMessageMediumCommandBytes[0];
     case IthoLow:
@@ -631,7 +634,7 @@ uint8_t IthoCC1101::messageEncode(IthoPacket *itho, CC1101Packet *packet) {
     lenOutbuf = itho->length * 2.5;
   }
   else { //is this an issue? inData last byte does not fill out buffer length, add 1 out byte extra, padding is done after encode
-    lenOutbuf = (uint8_t)(itho->length * 2.5) + 0, 5;
+    lenOutbuf = (uint8_t)(itho->length * 2.5) + 0.5;
   }
 
   uint8_t out_bytecounter = 14;   //index of Outbuf, start at offset 14, first part of the message is set manually
@@ -699,10 +702,6 @@ uint8_t IthoCC1101::messageEncode(IthoPacket *itho, CC1101Packet *packet) {
       out_shift--;
     }
   }
-  //
-  //  for (int i = 0; i < sizeof(itho->dataDecoded) / sizeof(itho->dataDecoded[0]); i++) {        //zero out data in dataDecoded buffer. FIXME: probably could use a better solution.
-  //    itho->dataDecoded[i] = 0;
-  //  }
 
   return out_bytecounter;
 }
@@ -712,6 +711,9 @@ void IthoCC1101::messageDecode(CC1101Packet *packet, IthoPacket *itho) {
 
   itho->length = 0;
   int lenInbuf = packet->length;
+
+  lenInbuf -= STARTBYTE; //correct for sync byte pos
+
   while (lenInbuf >= 5) {
     lenInbuf -= 5;
     itho->length += 2;
@@ -723,24 +725,18 @@ void IthoCC1101::messageDecode(CC1101Packet *packet, IthoPacket *itho) {
   for (int i = 0; i < sizeof(itho->dataDecoded) / sizeof(itho->dataDecoded[0]); i++) {
     itho->dataDecoded[i] = 0;
   }
-
-  if (DEBUG == 2) {
-    char buf[32];
-    Serial.println();
-    Serial.print("inMessage length: "); Serial.print(packet->length); Serial.println(" bytes; inMessage bit pattern: ");
-    for (int i = 0; i < packet->length; i++) {
-      strcpy(buf, "");
-      sprintf(buf, BYTE_TO_BINARY_PATTERN, BYTE_TO_BINARY(packet->data[i]));
-      Serial.print(buf);
-    }
-    Serial.println();
+  for (int i = 0; i < sizeof(itho->dataDecodedChk) / sizeof(itho->dataDecodedChk[0]); i++) {
+    itho->dataDecodedChk[i] = 0;
   }
 
   uint8_t out_i = 0;                                  //byte index
   uint8_t out_j = 4;                                  //bit index
+  uint8_t out_i_chk = 0;                              //byte index
+  uint8_t out_j_chk = 4;                              //bit index
   uint8_t in_bitcounter = 0;                          //process per 10 input bits
 
-  for (int i = 0; i < packet->length; i++) {
+  for (int i = STARTBYTE; i < packet->length; i++) {
+
     for (int j = 7; j > -1; j--) {
       if (in_bitcounter == 0 || in_bitcounter == 2 || in_bitcounter == 4 || in_bitcounter == 6) { //select input bits for output
         uint8_t x = packet->data[i];   //select input byte
@@ -752,14 +748,23 @@ void IthoCC1101::messageDecode(CC1101Packet *packet, IthoPacket *itho) {
         if (out_j > 7) out_j = 0;
         if (out_j == 4) out_i += 1;
       }
+      if (in_bitcounter == 1 || in_bitcounter == 3 || in_bitcounter == 5 || in_bitcounter == 7) { //select input bits for check output
+        uint8_t x = packet->data[i];   //select input byte
+        x = x >> j;             //select input bit
+        x = x & 0b00000001;
+        x = x << out_j_chk;         //set value for output bit
+        itho->dataDecodedChk[out_i_chk] = itho->dataDecodedChk[out_i_chk] | x;
+        out_j_chk += 1;             //next output bit
+        if (out_j_chk > 7) out_j_chk = 0;
+        if (out_j_chk == 4) {
+          itho->dataDecodedChk[out_i_chk] = ~itho->dataDecodedChk[out_i_chk]; //inverse bits
+          out_i_chk += 1;
+        }
+      }
       in_bitcounter += 1;     //continue cyling in groups of 10 bits
       if (in_bitcounter > 9) in_bitcounter = 0;
     }
   }
-  itho->deviceType  = itho->dataDecoded[0];
-  itho->deviceId[0] = itho->dataDecoded[1];
-  itho->deviceId[1] = itho->dataDecoded[2];
-  itho->deviceId[2] = itho->dataDecoded[3];
 }
 
 uint8_t IthoCC1101::ReadRSSI()
@@ -824,7 +829,6 @@ String IthoCC1101::LastMessageDecoded() {
   String str;
   if (inIthoPacket.length > 11) {
     str += "Device type?: " + String(inIthoPacket.deviceType);
-    str += " - Device ID: " + String(inIthoPacket.deviceId[0]) + "," + String(inIthoPacket.deviceId[1]) + "," + String(inIthoPacket.deviceId[2]);
     str += " - CMD: ";
     for (int i = 4; i < inIthoPacket.length; i++) {
       str += String(inIthoPacket.dataDecoded[i]);

@@ -3,13 +3,15 @@ Plugin for ESPEasy regarding a ITHO Fan remote
 
 A CC1101 868Mhz transmitter is needed (available on ebay or aliexpress)
 
-This plugin is using the library from: https://github.com/arjenhiemstra/IthoEcoFanRFT/
+This plugin is using the **NEW** library from: https://github.com/arjenhiemstra/IthoEcoFanRFT/
 made by 'arjanhiemstra' based on the library made by 'supersjimmie' and 'klusjesman'.
+It is now possible to program the Device ID of your ESPEasy in case you have a neighbour who also runs a node.
+
 The original ESPEasy Itho plugin was made by jodur: https://github.com/jodur/ESPEASY_Plugin_ITHO
 
 For more info see also: https://gathering.tweakers.net/forum/list_messages/1690945
 
-**New library currently caushes crashes when sending**
+**Latest release: ESP_Easy_mega_20210223_normal_ESP8266_4M1M-newlib.bin
 
 |CC11xx pin    |ESP pins|Description                                        |
 |:-------------|:-------|:--------------------------------------------------|

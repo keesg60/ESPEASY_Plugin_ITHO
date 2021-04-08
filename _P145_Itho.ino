@@ -145,7 +145,9 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 	case PLUGIN_SET_DEFAULTS:
 		{
     	PCONFIG(0) = 1;
-			//PCONFIG(1) = 170;
+			PCONFIG(1) = 10;
+			PCONFIG(2) = 87;
+			PCONFIG(3) = 81;
     	success = true;
 			break;
 		}
@@ -161,7 +163,7 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 			LoadCustomTaskSettings(event->TaskIndex, (byte*)&PLUGIN_145_ExtraSettings, sizeof(PLUGIN_145_ExtraSettings));
 			addLog(LOG_LEVEL_INFO, F("Extra Settings PLUGIN_145 loaded"));
 			//PLUGIN_145_rf.setSync1(PCONFIG(1));
-			PLUGIN_145_rf.setDeviceID(10, 87, 81); //DeviceID used to send commands, can also be changed on the fly for multi itho control, 10,87,81 corresponds with old library
+			PLUGIN_145_rf.setDeviceID(PCONFIG(1), PCONFIG(2), PCONFIG(3)); //DeviceID used to send commands, can also be changed on the fly for multi itho control, 10,87,81 corresponds with old library
 			PLUGIN_145_rf.init();
 			Plugin_145_IRQ_pin = Settings.TaskDevicePin1[event->TaskIndex];
 			pinMode(Plugin_145_IRQ_pin, INPUT);
@@ -385,8 +387,10 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
     addFormTextBox(F("Unit ID remote 2"), F("PLUGIN_145_ID2"), PLUGIN_145_ExtraSettings.ID2, 8);
     addFormTextBox(F("Unit ID remote 3"), F("PLUGIN_145_ID3"), PLUGIN_145_ExtraSettings.ID3, 8);
 		addFormCheckBox(F("Enable RF receive log"), F("p145_log"), PCONFIG(0));
-		//addFormNumericBox(F("Remote SYNC1 byte"), F("p145_remote"), PCONFIG(1), 0, 255);
-		//addFormNote(F("Sync byte for remote, known good values: 170 (default, remote with timer) and 172 (remote with not-at-home functionality)"));
+		addFormNumericBox(F("Device ID byte 1"), F("p145_deviceid1"), PCONFIG(1), 0, 255);
+		addFormNumericBox(F("Device ID byte 2"), F("p145_deviceid2"), PCONFIG(2), 0, 255);
+		addFormNumericBox(F("Device ID byte 3"), F("p145_deviceid3"), PCONFIG(3), 0, 255);
+		addFormNote(F("Device ID of your ESP, should not be the same as your neighbours ;-). Defaults to 10,87,81 which corresponds to the old Itho code"));
     success = true;
     break;
   }
@@ -400,7 +404,9 @@ boolean Plugin_145(byte function, struct EventStruct *event, String &string)
 
 		PCONFIG(0) = isFormItemChecked(F("p145_log"));
 		PLUGIN_145_Log = PCONFIG(0);
-		//PCONFIG(1) = getFormItemInt(F("p145_remote"), 170);
+		PCONFIG(1) = getFormItemInt(F("p145_deviceid1"), 10);
+		PCONFIG(2) = getFormItemInt(F("p145_deviceid2"), 87);
+		PCONFIG(3) = getFormItemInt(F("p145_deviceid3"), 81);
 	  success = true;
     break;
   }
