@@ -13,7 +13,7 @@ For more info see also: https://gathering.tweakers.net/forum/list_messages/16909
 
 And for a manual (in Dutch): https://docs.google.com/document/d/e/2PACX-1vRoO1TfkUKkyQlgzsmm7XzI3xyUXMBMrqwF6NJXVwQmykP6gMtsJWp-x2vYiHDEwyScqhsPkJHGGYs-/pub
 
-**Latest release: ESP_Easy_mega_20210223_normal_ESP8266_4M1M-newlib.bin**
+**Latest release: ESP_Easy_mega_20210802_normal_ESP8266_4M1M-newlib.bin**
 
 |CC11xx pin    |ESP pins|Description                                        |
 |:-------------|:-------|:--------------------------------------------------|
