@@ -1,4 +1,9 @@
 # ESPEASY_Plugin_ITHO
+
+** Note: this repository is deprecated and will not be updated. The Itho plugin moved from the plugin playground to the ESPEasy main repository (https://github.com/letscontrolit/ESPEasy).
+It will be available in the testing D build of the mega as plugin P118. Mega_20211105 is the latest version which does not include it, and is therefore available in this repository (still as P145).
+You will have to set all settings again after moving from P145 to P118, it is not required to re-join the ESP with the Itho fan if the same device ID is used. **
+
 Plugin for ESPEasy regarding a ITHO Fan remote
 
 A CC1101 868Mhz transmitter is needed (available on ebay or aliexpress)
